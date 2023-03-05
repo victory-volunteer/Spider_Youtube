@@ -3,18 +3,28 @@ import re
 import requests
 import xlwt
 
+PROXY = {"https": "127.0.0.1:7890"}
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36 Edg/107.0.1418.24",
+    "accept-language": "zh-CN,zh;q=0.9"
+}
+# 统计爬取条目
+x = 1
 
-def first_page():
+
+def first_page(s, url):
     '''
     获取第一段数据（前30个）信息
     :return: 其他段数据的请求url中的一个参数
     '''
     try:
-        result = s.get(url, headers=headers, proxies={"https": "127.0.0.1:10809"}, timeout=20)
+        result = s.get(url, headers=headers, proxies=PROXY, timeout=20)
     except Exception as e:
         print('超时原因：', e)
     else:
         count = 0
+        # 获取下一次请求需要的continuation参数
+        continuation = re.search(r'"continuationCommand":\{"token":"(.*?)","request":".*?"}}}}]', result.text).group(1)
         # 获取前30个视频的标题，发布时间，时长，观看数 以及视频链接
         label_obj = re.compile(
             r'}],"accessibility":{"accessibilityData":{"label":"(.*?)"}.*?","commandMetadata":{"webCommandMetadata":{"url":"(/watch.*?)",')
@@ -32,10 +42,11 @@ def first_page():
 
         # 实测得知后面的请求不需要这个参数
         # innertubeApiKey = re.search(r'"innertubeApiKey":"(.*?)"', result.text).group(1)
-        # return innertubeApiKey
+
+        return continuation
 
 
-def other_page(continuation):
+def other_page(s, url, continuation):
     '''
     获取其余数据信息
     :param continuation: post表单中的可变参数, 待解决
@@ -59,14 +70,18 @@ def other_page(continuation):
         "continuation": continuation
     }
     try:
-        result = s.post(real_url, json=data, headers=headers, proxies={"https": "127.0.0.1:10809"}, timeout=20)
+        result = s.post(real_url, json=data, headers=headers, proxies=PROXY, timeout=20)
     except Exception as e:
         print('超时原因：', e)
     else:
         information = result.json()['onResponseReceivedActions'][0]['appendContinuationItemsAction'][
             'continuationItems']
         if len(information) == 31:
+            continuation = information[-1]['continuationItemRenderer']['continuationEndpoint']['continuationCommand'][
+                'token']
             information = information[:-1]
+        else:
+            continuation = None
         count = 0
         for i in information:
             all = i['richItemRenderer']['content']['videoRenderer']
@@ -78,8 +93,8 @@ def other_page(continuation):
                 'url']
             data_storage(title, release_time, duration, watch, video_url)
             count += 1
-
         print(f"处理完{count}条数据")
+        return continuation
 
 
 def data_storage(title, release_time, duration, watch, video_url):
@@ -106,14 +121,6 @@ def data_storage(title, release_time, duration, watch, video_url):
 
 
 if __name__ == '__main__':
-    # 公共变量
-    url = 'https://www.youtube.com/channel/UCgrqke1JhjHOU3AtwCmIL5Q/videos'
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36 Edg/107.0.1418.24",
-        "accept-language": "zh-CN,zh;q=0.9"
-    }
-    # 统计爬取条目
-    x = 1
     s = requests.session()
 
     # 表头数据预处理
@@ -126,14 +133,15 @@ if __name__ == '__main__':
     worksheet.write(0, 4, "url")
     workbook.save("油管.xls")
 
+    username = '@qiongren'
+    url = f'https://www.youtube.com/{username}/videos'
     # 处理前30个数据
-    first_page()
+    continuation = first_page(s, url)
 
     # 处理后面的数据
-    continuation = [
-        "4qmFsgKhARIYVUNncnFrZTFKaGpIT1UzQXR3Q21JTDVRGoQBOGdaZ0dsNTZYQXBZQ2pCRloyOUphR0l5VXpOMlpVTnpURVZaUzBSSmQwRlVaMlZSWjNkSmR6VmhSRzEzV1ZGcmIzRkVkRUZLU1VGV1FVRVNKRFl6TmpNeFkyVmhMVEF3TURBdE1tUmlZeTFoT1dVNUxURTBNakl6WW1JM1pUVTROaGdC",
-        "4qmFsgKxARIYVUNncnFrZTFKaGpIT1UzQXR3Q21JTDVRGpQBOGdac0dtcDZhQXBrQ2p4RFoxcEdXakJyZUZSVlJWTkRkMmxRYjE5NlIzaE5SMnQwZERoQ1MwUkpkMEZxWnpoUlozZEpiRmt0UlcxM1dWRnZORjl6YlZGR1NVRnNRWGtTSkRZek5qVmlNV0kyTFRBd01EQXRNbVl6WVMwNU5XTTRMVFU0TWpReU9XSTFZbUkzWXhnQg",
-        "4qmFsgKxARIYVUNncnFrZTFKaGpIT1UzQXR3Q21JTDVRGpQBOGdac0dtcDZhQXBrQ2p4RFoxcEdXakJyZUZSVlJWTkRkMnBrT1dWVVYyMWxWMlF6TldOQ1MwUkpkMEY2YUdGUlozZEpYMkkyUlcxM1dWRnVabXBNTW5kS1NVRXhRWGtTSkRZek5qWXdOalF4TFRBd01EQXRNbVl6WVMwNU5XTTRMVFU0TWpReU9XSTFZbUkzWXhnQg"
-    ]
-    for i in continuation:
-        other_page(i)
+    while True:
+        if continuation is not None:
+            continuation = other_page(s, url, continuation)
+        else:
+            break
+    print(f"{x-1}条数据爬取完毕")

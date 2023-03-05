@@ -5,11 +5,12 @@ from tqdm import tqdm
 import os
 from concurrent.futures import ThreadPoolExecutor
 
+PROXY = {"https": "127.0.0.1:7890"}
+
 
 def video(url):
     try:
-        result = s.get(url, headers=headers,
-                       proxies={"https": "127.0.0.1:10809"}, timeout=20)
+        result = s.get(url, headers=headers, proxies=PROXY, timeout=20)
     except Exception as e:
         print('超时原因：', e)
     else:
@@ -48,7 +49,7 @@ def video(url):
 
 def video_download(video_url, title):
     try:
-        video = requests.get(video_url, stream=True, proxies={"https": "127.0.0.1:10809"}, timeout=20)
+        video = requests.get(video_url, stream=True, proxies=PROXY, timeout=20)
     except Exception as e:
         print('超时原因：', e)
     else:
@@ -74,7 +75,7 @@ def video_download(video_url, title):
 
 def audio_download(audio_url, title):
     try:
-        audio = requests.get(audio_url, stream=True, proxies={"https": "127.0.0.1:10809"}, timeout=20)
+        audio = requests.get(audio_url, stream=True, proxies=PROXY, timeout=20)
     except Exception as e:
         print('超时原因：', e)
     else:
@@ -100,5 +101,5 @@ if __name__ == '__main__':
     }
     s = requests.session()
 
-    url = 'https://www.youtube.com/watch?v=sZBP7lNtLuU'
+    url = 'https://www.youtube.com/watch?v=Bx4MSQCvUBY'
     video(url)
